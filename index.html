@@ -47,10 +47,10 @@
     async function uploadImage(imageFile) {
       const formData = new FormData();
       formData.append("file", imageFile);
-      formData.append("upload_preset", "ml_default"); // Default unsigned preset in Cloudinary
+      formData.append("upload_preset", "vet_chick_preset"); // Use your preset name
 
       try {
-        // 🔥 Upload image to Cloudinary
+        // 🔥 Upload image to Cloudinary (Now with correct upload preset)
         const uploadRes = await fetch("https://api.cloudinary.com/v1_1/chicken/image/upload", {
           method: "POST",
           body: formData,
