@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VetChick - Diagnose</title>
+  <link rel="stylesheet" href="main.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body class="dark-mode">
+  <div class="container">
+    <header>
+      <h1 class="title">تشخيص حالة الدجاجة<br><span class="en">Diagnose Your Chicken</span></h1>
+    </header>
+    <main>
+      <form id="diagnosis-form">
+        <label>نوع التشخيص<br><span class="en">Type of Diagnosis</span></label>
+        <div class="options">
+          <label><input type="radio" name="type" value="droppings" checked> فضلات الدجاج / Chicken Droppings</label>
+          <label><input type="radio" name="type" value="chicken"> دجاجة مريضة / Sick Chicken</label>
+        </div>
+        <label for="image">ارفع صورة<br><span class="en">Upload a Photo</span></label>
+        <input type="file" id="image" name="image" accept="image/*" required>
+        <label for="note">ملاحظات إضافية (اختياري)<br><span class="en">Optional Note</span></label>
+        <textarea id="note" name="note" placeholder="اكتب ما تراه... / Describe what you see..."></textarea>
+        <button type="submit">تحليل الآن<br><span class="en">Analyze Now</span></button>
+      </form>
+      <section id="result-section" style="display:none; margin-top: 40px;">
+        <h2>النتيجة / Diagnosis Result</h2>
+        <div id="result-output">
+          <p><strong>المرض:</strong> <span id="disease-name">---</span></p>
+          <p><strong>الوصف:</strong> <span id="disease-description">---</span></p>
+          <p><strong>العلاج:</strong> <span id="treatment-plan">---</span></p>
+          <p><strong>الدواء:</strong> <span id="medicine-name">---</span></p>
+          <p><strong>طريقة الاستعمال:</strong> <span id="medicine-usage">---</span></p>
+        </div>
+        <div class="result-actions">
+          <button onclick="shareResult()">مشاركة النتيجة / Share Result</button>
+          <button onclick="savePDF()">حفظ PDF / Save as PDF</button>
+        </div>
+      </section>
+    </main>
+  </div>
+  
+  
+  <script>
+    async function uploadImage(imageFile) {
+      const formData = new FormData();
+      formData.append("file", imageFile);
+      formData.append("upload_preset", "ml_default"); // Default unsigned preset in Cloudinary
+
+      try {
+        // 🔥 Upload image to Cloudinary
+        const uploadRes = await fetch("https://api.cloudinary.com/v1_1/chicken/image/upload", {
+          method: "POST",
+          body: formData,
+        });
+
+        const uploadJson = await uploadRes.json();
+        console.log("Cloudinary response:", uploadJson);
+
+        if (!uploadJson.secure_url) {
+          alert("Failed to upload image!");
+          return null;
+        }
+
+        return uploadJson.secure_url;
+      } catch (err) {
+        console.error("Upload failed:", err);
+        alert("Image upload failed!");
+        return null;
+      }
+    }
+
+    document.getElementById("diagnosis-form").addEventListener("submit", async function (e) {
+      e.preventDefault();
+      const imageInput = document.getElementById("image").files[0];
+      const note = document.getElementById("note").value;
+      if (!imageInput) return alert("يرجى رفع صورة / Please upload an image");
+
+      const imageUrl = await uploadImage(imageInput);
+      if (!imageUrl) return;
+
+      try {
+        // 🔵 Send Image URL to GPT-4 Vision
+        const gptRes = await fetch("https://api.openai.com/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer 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"
+          },
+          body: JSON.stringify({
+            model: "gpt-4-vision-preview",
+            messages: [
+              {
+                "role": "user",
+                "content": [
+                  { "type": "text", "text": "Analyze this chicken image. Notes from user: " + note },
+                  { "type": "image_url", "image_url": { "url": imageUrl } }
+                ]
+              }
+            ],
+            max_tokens: 1000
+          })
+        });
+
+        const resultText = await gptRes.text();
+        console.log("GPT-4 Response:", resultText);
+        const result = JSON.parse(resultText);
+
+        const output = result.choices?.[0]?.message?.content || "تشخيص غير متوفر / Diagnosis unavailable";
+        const lines = output.split("\n");
+
+        document.getElementById("disease-name").textContent = lines[0] || "-";
+        document.getElementById("disease-description").textContent = lines[1] || "-";
+        document.getElementById("treatment-plan").textContent = lines[2] || "-";
+        document.getElementById("medicine-name").textContent = lines[3] || "-";
+        document.getElementById("medicine-usage").textContent = lines[4] || "-";
+
+        document.getElementById("result-section").style.display = "block";
+      } catch (err) {
+        alert("حدث خطأ أثناء تحليل الصورة / Error during image analysis");
+        console.error("Full error:", err);
+      }
+    });
+  </script>
+</body>
+</html>
